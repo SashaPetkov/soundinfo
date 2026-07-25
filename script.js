@@ -1,10 +1,10 @@
 const FREQ_BIT_0 = 7000;
 const FREQ_BIT_1 = 9000;
-const FREQ_ACK   = 6000;
+const FREQ_ACK   = 4500; 
 
 const PULSE_TIME = 0.07;
-const ACK_TIME   = 0.08;
-const ECHO_PAUSE = 300; 
+const ACK_TIME   = 0.06;
+const ECHO_PAUSE = 250; 
 const TIMEOUT_MS = 1000;
 
 let audioCtx = null;
@@ -199,21 +199,18 @@ if (btnListen) {
             const p0 = detectFrequency(chunkBuffer, FREQ_BIT_0, ctx.sampleRate);
             const p1 = detectFrequency(chunkBuffer, FREQ_BIT_1, ctx.sampleRate);
 
-            const isBit0 = p0 > 0.006 && p0 > p1 * 1.5;
-            const isBit1 = p1 > 0.006 && p1 > p0 * 1.5;
+            const isBit0 = p0 > 0.008 && p0 > p1 * 1.8;
+            const isBit1 = p1 > 0.008 && p1 > p0 * 1.8;
 
             if (isBit0 || isBit1) {
                 const bit = isBit1 ? "1" : "0";
                 receivedBits += bit;
                 logMsg(`Бит №${receivedBits.length}: '${bit}'`);
 
-                // 1. Небольшая пауза перед ответом, чтобы тон ноута затих
                 await new Promise(r => setTimeout(r, 40));
 
-                // 2. Издаем ответный тон ACK (громкость 0.8 для хорошей слышимости)
-                await playTone(FREQ_ACK, ACK_TIME, 0.8);
+                await playTone(FREQ_ACK, ACK_TIME, 0.3);
 
-                // 3. Проверка длины кадра
                 if (receivedBits.length === 4) {
                     expectedCharCount = parseInt(receivedBits, 2);
                     if (expectedCharCount > 0 && expectedCharCount <= 10) {
@@ -226,7 +223,6 @@ if (btnListen) {
                     }
                 }
 
-                // 4. Проверка завершения приема
                 if (expectedTotalBits > 0 && receivedBits.length >= expectedTotalBits) {
                     logMsg(`Пакет получен полностью!`);
                     decodeBits(receivedBits.substring(4));
@@ -236,10 +232,8 @@ if (btnListen) {
                     break;
                 }
 
-                // 5. ТАЙМАУТ СЛЕПОТЫ: Выжидаем паузу гашения эха
                 await new Promise(r => setTimeout(r, ECHO_PAUSE));
 
-                // 6. Вытряхиваем старые сэмплы из буфера перед возобновлением
                 analyser.getFloatTimeDomainData(chunkBuffer);
                 analyser.getFloatTimeDomainData(chunkBuffer);
             } else {
