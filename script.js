@@ -8,6 +8,7 @@ const ECHO_PAUSE = 120;
 const TIMEOUT_MS = 700;
 
 let audioCtx = null;
+let isListening = false;
 
 function logMsg(msg, isSuccess = false) {
     const logDiv = document.getElementById('log');
@@ -57,7 +58,7 @@ async function playTone(freq, durationSec) {
     gain.connect(ctx.destination);
     
     const now = ctx.currentTime;
-    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.setValueAtTime(0.3, now);
     osc.start(now);
     
     gain.gain.setValueAtTime(0, now + durationSec);
@@ -69,6 +70,7 @@ async function playTone(freq, durationSec) {
 const btnSend = document.getElementById('btnSend');
 if (btnSend) {
     btnSend.addEventListener('click', async () => {
+        isListening = false;
         const ctx = await getAudioContext();
         const textInput = document.getElementById('textInput');
         const text = textInput ? textInput.value : "";
@@ -114,7 +116,7 @@ if (btnSend) {
                         analyser.getFloatTimeDomainData(chunkBuffer);
                         const ackPower = detectFrequency(chunkBuffer, FREQ_ACK, ctx.sampleRate);
 
-                        if (ackPower > 0.006) {
+                        if (ackPower > 0.01) {
                             handled = true;
                             clearInterval(timer);
                             chunkBuffer.fill(0);
@@ -190,24 +192,23 @@ if (btnListen) {
         let receivedBits = "";
         let expectedCharCount = 0;
         let expectedTotalBits = 0;
-        let isProcessingBit = false;
+        isListening = true;
 
-        setInterval(async () => {
-            if (isProcessingBit) return;
-
+        while (isListening) {
             analyser.getFloatTimeDomainData(chunkBuffer);
 
             const p0 = detectFrequency(chunkBuffer, FREQ_BIT_0, ctx.sampleRate);
             const p1 = detectFrequency(chunkBuffer, FREQ_BIT_1, ctx.sampleRate);
 
-            if (p0 > 0.006 || p1 > 0.006) {
-                isProcessingBit = true;
+            const isBit0 = p0 > 0.012 && p0 > p1 * 2;
+            const isBit1 = p1 > 0.012 && p1 > p0 * 2;
 
-                const bit = (p1 > p0) ? "1" : "0";
+            if (isBit0 || isBit1) {
+                const bit = isBit1 ? "1" : "0";
                 receivedBits += bit;
                 logMsg(`Бит №${receivedBits.length}: '${bit}'`);
 
-                await new Promise(r => setTimeout(r, Math.round(PULSE_TIME * 1000)));
+                await new Promise(r => setTimeout(r, 70));
 
                 await playTone(FREQ_ACK, ACK_TIME);
 
@@ -220,8 +221,6 @@ if (btnListen) {
                         logMsg(`[Ошибка] Искажение длины. Сброс.`);
                         receivedBits = "";
                         expectedTotalBits = 0;
-                        isProcessingBit = false;
-                        return;
                     }
                 }
 
@@ -230,14 +229,16 @@ if (btnListen) {
                     decodeBits(receivedBits.substring(4));
                     receivedBits = "";
                     expectedTotalBits = 0;
+                    isListening = false;
+                    break;
                 }
 
-                setTimeout(() => {
-                    chunkBuffer.fill(0);
-                    isProcessingBit = false;
-                }, ECHO_PAUSE);
+                await new Promise(r => setTimeout(r, ECHO_PAUSE));
+                chunkBuffer.fill(0);
+            } else {
+                await new Promise(r => setTimeout(r, 10));
             }
-        }, 10);
+        }
     });
 }
 
