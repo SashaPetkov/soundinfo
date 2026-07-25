@@ -2,10 +2,10 @@ const FREQ_BIT_0 = 7000;
 const FREQ_BIT_1 = 9000;
 const FREQ_ACK   = 4500; 
 
-const PULSE_TIME = 0.07;
-const ACK_TIME   = 0.06;
-const ECHO_PAUSE = 250; 
-const TIMEOUT_MS = 1000;
+const PULSE_TIME = 0.045;
+const ACK_TIME   = 0.035;
+const ECHO_PAUSE = 120; 
+const TIMEOUT_MS = 600;
 
 let audioCtx = null;
 let isListening = false;
@@ -62,7 +62,7 @@ async function playTone(freq, durationSec, volume = 0.3) {
     osc.start(now);
     
     gain.gain.setValueAtTime(0, now + durationSec);
-    osc.stop(now + durationSec + 0.01);
+    osc.stop(now + durationSec + 0.005);
 
     return new Promise(resolve => setTimeout(resolve, durationSec * 1000));
 }
@@ -100,7 +100,7 @@ if (btnSend) {
 
         const source = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
-        analyser.fftSize = 1024;
+        analyser.fftSize = 512;
         source.connect(analyser);
         const chunkBuffer = new Float32Array(analyser.fftSize);
 
@@ -125,8 +125,8 @@ if (btnSend) {
                             clearInterval(timer);
                             resolve(false);
                         }
-                    }, 10);
-                }, 60);
+                    }, 5);
+                }, 30);
             });
         };
 
@@ -149,7 +149,7 @@ if (btnSend) {
                 } else {
                     retries++;
                     logMsg(`Таймаут! Повтор бита (${retries}/5)...`);
-                    await new Promise(r => setTimeout(r, 200));
+                    await new Promise(r => setTimeout(r, 100));
                 }
             }
 
@@ -183,7 +183,7 @@ if (btnListen) {
 
         const source = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
-        analyser.fftSize = 1024;
+        analyser.fftSize = 512;
         source.connect(analyser);
 
         const chunkBuffer = new Float32Array(analyser.fftSize);
@@ -207,7 +207,7 @@ if (btnListen) {
                 receivedBits += bit;
                 logMsg(`Бит №${receivedBits.length}: '${bit}'`);
 
-                await new Promise(r => setTimeout(r, 40));
+                await new Promise(r => setTimeout(r, 20));
 
                 await playTone(FREQ_ACK, ACK_TIME, 0.3);
 
@@ -237,7 +237,7 @@ if (btnListen) {
                 analyser.getFloatTimeDomainData(chunkBuffer);
                 analyser.getFloatTimeDomainData(chunkBuffer);
             } else {
-                await new Promise(r => setTimeout(r, 10));
+                await new Promise(r => setTimeout(r, 5));
             }
         }
     });
