@@ -209,7 +209,7 @@ if (btnListen) {
                 logMsg(`Бит №${receivedBits.length}: '${bit}'`);
 
                 // Пауза перед ответом (40 мс)
-                await new Promise(r => setTimeout(r, 40));
+                await new Promise(r => setTimeout(r, 50));
 
                 // Отправляем ACK
                 await playTone(FREQ_ACK, ACK_TIME);
