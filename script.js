@@ -3,9 +3,9 @@ const FREQ_BIT_1 = 9000;
 const FREQ_ACK   = 6000;
 
 const PULSE_TIME = 0.07;
-const ACK_TIME   = 0.05;
+const ACK_TIME   = 0.06;
 const ECHO_PAUSE = 120;
-const TIMEOUT_MS = 700;
+const TIMEOUT_MS = 850;
 
 let audioCtx = null;
 let isListening = false;
@@ -47,7 +47,7 @@ function detectFrequency(samples, targetFreq, sampleRate) {
     return Math.sqrt(real * real + imag * imag) / samples.length;
 }
 
-async function playTone(freq, durationSec) {
+async function playTone(freq, durationSec, volume = 0.4) {
     const ctx = await getAudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -58,7 +58,7 @@ async function playTone(freq, durationSec) {
     gain.connect(ctx.destination);
     
     const now = ctx.currentTime;
-    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.setValueAtTime(volume, now);
     osc.start(now);
     
     gain.gain.setValueAtTime(0, now + durationSec);
@@ -116,7 +116,7 @@ if (btnSend) {
                         analyser.getFloatTimeDomainData(chunkBuffer);
                         const ackPower = detectFrequency(chunkBuffer, FREQ_ACK, ctx.sampleRate);
 
-                        if (ackPower > 0.012) {
+                        if (ackPower > 0.004) {
                             handled = true;
                             clearInterval(timer);
                             resolve(true);
@@ -126,7 +126,7 @@ if (btnSend) {
                             resolve(false);
                         }
                     }, 10);
-                }, 40);
+                }, 30);
             });
         };
 
@@ -139,7 +139,7 @@ if (btnSend) {
             while (!success && retries < 5) {
                 logMsg(`Бит ${i + 1}/${bitStream.length} ('${bit}')...`);
                 
-                await playTone(freq, PULSE_TIME);
+                await playTone(freq, PULSE_TIME, 0.4);
                 const ackReceived = await waitForACK();
                 
                 if (ackReceived) {
@@ -199,31 +199,28 @@ if (btnListen) {
             const p0 = detectFrequency(chunkBuffer, FREQ_BIT_0, ctx.sampleRate);
             const p1 = detectFrequency(chunkBuffer, FREQ_BIT_1, ctx.sampleRate);
 
-            const isBit0 = p0 > 0.015 && p0 > p1 * 2;
-            const isBit1 = p1 > 0.015 && p1 > p0 * 2;
+            const isBit0 = p0 > 0.008 && p0 > p1 * 1.5;
+            const isBit1 = p1 > 0.008 && p1 > p0 * 1.5;
 
             if (isBit0 || isBit1) {
                 const bit = isBit1 ? "1" : "0";
                 receivedBits += bit;
                 logMsg(`Бит №${receivedBits.length}: '${bit}'`);
 
-                // 1. Отвечаем ACK
-                await playTone(FREQ_ACK, ACK_TIME);
+                await playTone(FREQ_ACK, ACK_TIME, 0.7);
 
-                // 2. Проверка длины
                 if (receivedBits.length === 4) {
                     expectedCharCount = parseInt(receivedBits, 2);
                     if (expectedCharCount > 0 && expectedCharCount <= 10) {
                         expectedTotalBits = 4 + (expectedCharCount * 8);
                         logMsg(`Длина: ${expectedCharCount} симв. (${expectedTotalBits} бит)`);
                     } else {
-                        logMsg(`[Ошибка] Искажение длины (${expectedCharCount}). Сброс.`);
+                        logMsg(`[Ошибка] Искажение длины. Сброс.`);
                         receivedBits = "";
                         expectedTotalBits = 0;
                     }
                 }
 
-                // 3. Проверка окончания
                 if (expectedTotalBits > 0 && receivedBits.length >= expectedTotalBits) {
                     logMsg(`Пакет получен полностью!`);
                     decodeBits(receivedBits.substring(4));
@@ -233,13 +230,10 @@ if (btnListen) {
                     break;
                 }
 
-                // 4. ПРИНУДИТЕЛЬНАЯ ПРОМЫВКА АУДИОБУФЕРА: 
-                // Выжидаем паузу и вхолостую "вытряхиваем" старые сэмплы из буфера
                 await new Promise(r => setTimeout(r, ECHO_PAUSE));
                 analyser.getFloatTimeDomainData(chunkBuffer);
-                analyser.getFloatTimeDomainData(chunkBuffer);
             } else {
-                await new Promise(r => setTimeout(r, 15));
+                await new Promise(r => setTimeout(r, 10));
             }
         }
     });
