@@ -1,11 +1,11 @@
-const FREQ_BIT_0 = 7000;      // Бит '0'
-const FREQ_BIT_1 = 9000;      // Бит '1'
-const FREQ_ACK   = 6000;      // Подтверждение (ACK)
+const FREQ_BIT_0 = 7000;
+const FREQ_BIT_1 = 9000;
+const FREQ_ACK   = 6000;
 
-const PULSE_TIME = 0.07;      // Длительность тона бита 
-const ACK_TIME   = 0.05;      // Длительность тона ACK 
-const ECHO_PAUSE = 120;       // Пауза гашения эха 
-const TIMEOUT_MS = 700;       // Таймаут ожидания ACK 
+const PULSE_TIME = 0.07;
+const ACK_TIME   = 0.05;
+const ECHO_PAUSE = 120;
+const TIMEOUT_MS = 700;
 
 let audioCtx = null;
 
@@ -27,7 +27,6 @@ async function getAudioContext() {
     return audioCtx;
 }
 
-// Детектор частоты Гёрцеля
 function detectFrequency(samples, targetFreq, sampleRate) {
     let k = Math.round(samples.length * targetFreq / sampleRate);
     let w = (2 * Math.PI / samples.length) * k;
@@ -47,7 +46,6 @@ function detectFrequency(samples, targetFreq, sampleRate) {
     return Math.sqrt(real * real + imag * imag) / samples.length;
 }
 
-// Воспроизведение звукового тона
 async function playTone(freq, durationSec) {
     const ctx = await getAudioContext();
     const osc = ctx.createOscillator();
@@ -59,7 +57,7 @@ async function playTone(freq, durationSec) {
     gain.connect(ctx.destination);
     
     const now = ctx.currentTime;
-    gain.gain.setValueAtTime(0.8, now);
+    gain.gain.setValueAtTime(0.4, now);
     osc.start(now);
     
     gain.gain.setValueAtTime(0, now + durationSec);
@@ -68,7 +66,6 @@ async function playTone(freq, durationSec) {
     return new Promise(resolve => setTimeout(resolve, durationSec * 1000));
 }
 
-// Модуль передачи
 const btnSend = document.getElementById('btnSend');
 if (btnSend) {
     btnSend.addEventListener('click', async () => {
@@ -105,30 +102,33 @@ if (btnSend) {
         source.connect(analyser);
         const chunkBuffer = new Float32Array(analyser.fftSize);
 
-        // Ожидание ответа ACK
         const waitForACK = () => {
             return new Promise((resolve) => {
                 const startTime = Date.now();
-                
-                // Ждем 60 мс чтобы не услышать эхо своего динамика
-		setTimeout(() => {
+                let handled = false;
+
+                setTimeout(() => {
                     const timer = setInterval(() => {
+                        if (handled) return;
+
                         analyser.getFloatTimeDomainData(chunkBuffer);
                         const ackPower = detectFrequency(chunkBuffer, FREQ_ACK, ctx.sampleRate);
 
-                        if (ackPower > 0.003) {
+                        if (ackPower > 0.006) {
+                            handled = true;
                             clearInterval(timer);
+                            chunkBuffer.fill(0);
                             resolve(true);
                         } else if (Date.now() - startTime > TIMEOUT_MS) {
+                            handled = true;
                             clearInterval(timer);
                             resolve(false);
                         }
                     }, 10);
-                }, 60);
+                }, 40);
             });
         };
 
-        // Отправка
         for (let i = 0; i < bitStream.length; i++) {
             const bit = bitStream[i];
             const freq = (bit === '1') ? FREQ_BIT_1 : FREQ_BIT_0;
@@ -162,7 +162,6 @@ if (btnSend) {
     });
 }
 
-// Модуль приема
 const btnListen = document.getElementById('btnListen');
 if (btnListen) {
     btnListen.addEventListener('click', async () => {
@@ -201,17 +200,15 @@ if (btnListen) {
             const p0 = detectFrequency(chunkBuffer, FREQ_BIT_0, ctx.sampleRate);
             const p1 = detectFrequency(chunkBuffer, FREQ_BIT_1, ctx.sampleRate);
 
-            if (p0 > 0.003 || p1 > 0.003) {
+            if (p0 > 0.006 || p1 > 0.006) {
                 isProcessingBit = true;
 
                 const bit = (p1 > p0) ? "1" : "0";
                 receivedBits += bit;
                 logMsg(`Бит №${receivedBits.length}: '${bit}'`);
 
-                // Пауза перед ответом (40 мс)
-                await new Promise(r => setTimeout(r, 70));
+                await new Promise(r => setTimeout(r, Math.round(PULSE_TIME * 1000)));
 
-                // Отправляем ACK
                 await playTone(FREQ_ACK, ACK_TIME);
 
                 if (receivedBits.length === 4) {
@@ -222,6 +219,7 @@ if (btnListen) {
                     } else {
                         logMsg(`[Ошибка] Искажение длины. Сброс.`);
                         receivedBits = "";
+                        expectedTotalBits = 0;
                         isProcessingBit = false;
                         return;
                     }
@@ -235,13 +233,14 @@ if (btnListen) {
                 }
 
                 setTimeout(() => {
+                    chunkBuffer.fill(0);
                     isProcessingBit = false;
                 }, ECHO_PAUSE);
             }
         }, 10);
     });
 }
-// Дешифратор
+
 function decodeBits(payloadBits) {
     let text = "";
     for (let i = 0; i < payloadBits.length; i += 8) {
