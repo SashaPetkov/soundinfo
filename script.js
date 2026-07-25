@@ -100,7 +100,7 @@ if (btnSend) {
 
         const source = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
-        analyser.fftSize = 2048;
+        analyser.fftSize = 1024;
         source.connect(analyser);
         const chunkBuffer = new Float32Array(analyser.fftSize);
 
@@ -116,10 +116,9 @@ if (btnSend) {
                         analyser.getFloatTimeDomainData(chunkBuffer);
                         const ackPower = detectFrequency(chunkBuffer, FREQ_ACK, ctx.sampleRate);
 
-                        if (ackPower > 0.01) {
+                        if (ackPower > 0.012) {
                             handled = true;
                             clearInterval(timer);
-                            chunkBuffer.fill(0);
                             resolve(true);
                         } else if (Date.now() - startTime > TIMEOUT_MS) {
                             handled = true;
@@ -184,7 +183,7 @@ if (btnListen) {
 
         const source = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
-        analyser.fftSize = 2048;
+        analyser.fftSize = 1024;
         source.connect(analyser);
 
         const chunkBuffer = new Float32Array(analyser.fftSize);
@@ -200,30 +199,31 @@ if (btnListen) {
             const p0 = detectFrequency(chunkBuffer, FREQ_BIT_0, ctx.sampleRate);
             const p1 = detectFrequency(chunkBuffer, FREQ_BIT_1, ctx.sampleRate);
 
-            const isBit0 = p0 > 0.012 && p0 > p1 * 2;
-            const isBit1 = p1 > 0.012 && p1 > p0 * 2;
+            const isBit0 = p0 > 0.015 && p0 > p1 * 2;
+            const isBit1 = p1 > 0.015 && p1 > p0 * 2;
 
             if (isBit0 || isBit1) {
                 const bit = isBit1 ? "1" : "0";
                 receivedBits += bit;
                 logMsg(`Бит №${receivedBits.length}: '${bit}'`);
 
-                await new Promise(r => setTimeout(r, 70));
-
+                // 1. Отвечаем ACK
                 await playTone(FREQ_ACK, ACK_TIME);
 
+                // 2. Проверка длины
                 if (receivedBits.length === 4) {
                     expectedCharCount = parseInt(receivedBits, 2);
                     if (expectedCharCount > 0 && expectedCharCount <= 10) {
                         expectedTotalBits = 4 + (expectedCharCount * 8);
                         logMsg(`Длина: ${expectedCharCount} симв. (${expectedTotalBits} бит)`);
                     } else {
-                        logMsg(`[Ошибка] Искажение длины. Сброс.`);
+                        logMsg(`[Ошибка] Искажение длины (${expectedCharCount}). Сброс.`);
                         receivedBits = "";
                         expectedTotalBits = 0;
                     }
                 }
 
+                // 3. Проверка окончания
                 if (expectedTotalBits > 0 && receivedBits.length >= expectedTotalBits) {
                     logMsg(`Пакет получен полностью!`);
                     decodeBits(receivedBits.substring(4));
@@ -233,10 +233,13 @@ if (btnListen) {
                     break;
                 }
 
+                // 4. ПРИНУДИТЕЛЬНАЯ ПРОМЫВКА АУДИОБУФЕРА: 
+                // Выжидаем паузу и вхолостую "вытряхиваем" старые сэмплы из буфера
                 await new Promise(r => setTimeout(r, ECHO_PAUSE));
-                chunkBuffer.fill(0);
+                analyser.getFloatTimeDomainData(chunkBuffer);
+                analyser.getFloatTimeDomainData(chunkBuffer);
             } else {
-                await new Promise(r => setTimeout(r, 10));
+                await new Promise(r => setTimeout(r, 15));
             }
         }
     });
