@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Акустический модем</title>
+    <style>
+        body {
+            font-family: ,'Neutral Face';
+	    src: url('fonts/NeutralFace.woff2') format('woff2'),
+                 url('fonts/NeutralFace.woff') format('woff');
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 0 10px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 { text-align: center; font-size: 1.5rem; }
+        .card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 40px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 40px;
+            font-size: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 40px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-bottom: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        #btnListen { background-color: #28a745; }
+        #btnListen:hover { background-color: #218838; }
+        #log {
+            background: #222;
+            color: #00ff66;
+            font-family: monospace;
+            padding: 10px;
+            border-radius: 40px;
+            height: 250px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+        }
+        .success { color: #ffff00; font-weight: bold; }
+        .error { color: #ff4d4d; }
+    </style>
+</head>
+<body>
+
+    <h1>🔊 Акустический Модем</h1>
+
+    <div class="card">
+        <h3>Передача</h3>
+        <input type="text" id="textInput" maxlength="10" placeholder="Введите текст (до 10 симв.)...">
+        <button id="btnSend">Отправить звуком</button>
+    </div>
+
+    <div class="card">
+        <h3>Прием</h3>
+        <button id="btnListen">Включить микрофон</button>
+    </div>
+
+    <div class="card">
+        <h3>Консоль / Лог</h3>
+        <div id="log"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
